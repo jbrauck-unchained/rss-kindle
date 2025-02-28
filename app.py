@@ -36,7 +36,15 @@ async def convert_to_epub(request: Request):
     try:
         logger.info("Received convert request")
         data = await request.json()
-        articles = data.get("articles", [])
+        
+        # Handle different input formats
+        if isinstance(data, dict) and "articles" in data:
+            articles = data["articles"]
+        elif isinstance(data, list):
+            articles = data
+        else:
+            articles = [data]  # Assume it's a single article
+            
         logger.info(f"Processing {len(articles)} articles")
 
         # Get current date for filename
@@ -67,6 +75,12 @@ async def convert_to_epub(request: Request):
         html_content += f"<h1>Daily Digest - {today}</h1>\n"
 
         for i, article in enumerate(articles):
+            # Handle case where article might be a string
+            if isinstance(article, str):
+                logger.warning(f"Article {i+1} is a string, not an object")
+                html_content += f"<p>{article}</p>\n"
+                continue
+                
             logger.info(f"Processing article {i+1}: {article.get('title', 'No title')}")
             html_content += f"<h1>{article.get('title', 'No title')}</h1>\n"
             # Check for either 'content' or 'cleanedContent' field
