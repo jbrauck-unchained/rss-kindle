@@ -2,7 +2,7 @@ services:
   rss-kindle:
     container_name: rss-kindle
     build: .
-    command: uvicorn app:app --host 0.0.0.0 --port 8000
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 8000
     restart: always
     ports:
       - "8000:8000"
