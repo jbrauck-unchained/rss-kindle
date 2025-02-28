@@ -4,20 +4,20 @@ FROM python:3.9-slim
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
 
-# Install the dependencies from requirements.txt
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Explicitly install uvicorn to ensure it's available
-RUN pip install --no-cache-dir uvicorn
+# Explicitly install FastAPI and uvicorn
+RUN pip install --no-cache-dir fastapi uvicorn
 
-# Make sure pip executables are in PATH
-ENV PATH="/usr/local/bin:${PATH}"
+# Copy the rest of the application
+COPY . .
 
-# Make port 8000 available to the world outside this container
+# Make port 8000 available
 EXPOSE 8000
 
-# Command to run the FastAPI app using uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run the app
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
