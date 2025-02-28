@@ -1,0 +1,18 @@
+services:
+  rss-kindle:
+    container_name: rss-kindle
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - rss-kindle-volume:/app  # Named volume to persist data in Docker's managed storage
+      - rss-kindle-data:/app/data  # Optional: For persistent storage of generated files
+    env_file:
+      - stack.env
+
+volumes:
+  rss-kindle-volume:
+    driver: local  # Named volume for your repo
+  rss-kindle-data:
+    driver: local  # Optional: Named volume for any additional persistent data
