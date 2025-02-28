@@ -19,8 +19,8 @@ COPY . .
 # Install dependencies explicitly including uvicorn
 RUN pip install --no-cache-dir fastapi uvicorn requests python-dotenv
 
-# Make port 8000 available
-EXPOSE 8000
+# Make port 8765 available
+EXPOSE 8765
 
 # Use a direct command that doesn't rely on PATH
-CMD ["/usr/local/bin/python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/usr/local/bin/python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8765"]
