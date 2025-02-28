@@ -1,14 +1,12 @@
 from fastapi import FastAPI, Request
 from starlette.responses import FileResponse
 import subprocess
+import smtplib
 import os
 import requests
 import logging
 import traceback
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
+from email.message import EmailMessage
 from dotenv import load_dotenv
 
 # Configure logging
@@ -23,12 +21,12 @@ logger.info("Environment variables loaded")
 
 app = FastAPI()
 
-# Gmail credentials
-GMAIL_USER = os.getenv("GMAIL_USER")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
 KINDLE_EMAIL = os.getenv("KINDLE_EMAIL")
+FROM_EMAIL = os.getenv("FROM_EMAIL")
 
-logger.info(f"Configuration: GMAIL_USER={GMAIL_USER}, KINDLE_EMAIL={KINDLE_EMAIL}")
+logger.info(f"Configuration: MAILGUN_DOMAIN={MAILGUN_DOMAIN}, FROM_EMAIL={FROM_EMAIL}, KINDLE_EMAIL={KINDLE_EMAIL}")
 
 @app.post("/convert")
 async def convert_to_epub(request: Request):
@@ -71,7 +69,6 @@ async def convert_to_epub(request: Request):
 
         html_path = "/app/daily_digest.html"
         epub_path = "/app/daily_digest.epub"
-        mobi_path = "/app/daily_digest.mobi"
         
         logger.info(f"Writing HTML to {html_path}")
         with open(html_path, "w") as f:
@@ -90,31 +87,17 @@ async def convert_to_epub(request: Request):
             return {"error": "Failed to convert to EPUB", "details": result.stderr}
         
         logger.info(f"EPUB created at {epub_path}")
-        
-        # Convert to MOBI (Kindle format)
-        logger.info("Converting EPUB to MOBI")
-        result = subprocess.run(
-            ["ebook-convert", epub_path, mobi_path], 
-            capture_output=True, 
-            text=True
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"ebook-convert to MOBI failed: {result.stderr}")
-            return {"error": "Failed to convert to MOBI", "details": result.stderr}
-        
-        logger.info(f"MOBI created at {mobi_path}")
 
         # Send to Kindle
         logger.info("Sending to Kindle")
-        send_result = send_to_kindle_gmail(mobi_path)
+        send_result = send_to_kindle(epub_path)
         
         if not send_result["success"]:
             logger.error(f"Failed to send to Kindle: {send_result['error']}")
             return {"error": "Failed to send to Kindle", "details": send_result["error"]}
         
         logger.info("Successfully converted and sent to Kindle")
-        return {"message": "Converted & Sent!", "download_link": f"/download/daily_digest.mobi"}
+        return {"message": "Converted & Sent!", "download_link": f"/download/daily_digest.epub"}
     
     except Exception as e:
         logger.error(f"Error in convert_to_epub: {str(e)}")
@@ -130,51 +113,38 @@ async def download_file(filename: str):
         return {"error": "File not found"}
     return FileResponse(file_path)
 
-def send_to_kindle_gmail(file_path):
+def send_to_kindle(file_path):
     try:
         logger.info(f"Sending {file_path} to Kindle at {KINDLE_EMAIL}")
+        url = f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages"
         
         if not os.path.exists(file_path):
             error_msg = f"File not found: {file_path}"
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
         
-        # Create the email
-        msg = MIMEMultipart()
-        msg['From'] = GMAIL_USER
-        msg['To'] = KINDLE_EMAIL
-        msg['Subject'] = "Your Daily RSS Feed"
+        files = [("attachment", ("rss_feed.mobi", open(file_path, "rb")))]
         
-        # Attach the body text
-        body = "Here's your daily RSS feed for Kindle."
-        msg.attach(MIMEText(body, 'plain'))
+        data = {
+            "from": FROM_EMAIL,
+            "to": KINDLE_EMAIL,
+            "subject": "Your Daily RSS Feed",
+            "text": "Here's your daily RSS feed for Kindle."
+        }
+
+        logger.info("Sending request to Mailgun API")
+        response = requests.post(url, auth=("api", MAILGUN_API_KEY), files=files, data=data)
         
-        # Attach the file
-        with open(file_path, 'rb') as file:
-            attachment = MIMEApplication(file.read(), Name="daily_digest.mobi")
-        
-        attachment['Content-Disposition'] = f'attachment; filename="daily_digest.mobi"'
-        msg.attach(attachment)
-        
-        # Connect to Gmail SMTP server
-        logger.info("Connecting to Gmail SMTP server")
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        
-        # Login to Gmail
-        logger.info("Logging in to Gmail")
-        server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        
-        # Send the email
-        logger.info("Sending email")
-        server.send_message(msg)
-        server.quit()
-        
-        logger.info("✅ Email sent successfully!")
-        return {"success": True}
+        if response.status_code == 200:
+            logger.info("✅ Email sent successfully!")
+            return {"success": True}
+        else:
+            error_msg = f"❌ Failed to send email: {response.text}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
     
     except Exception as e:
-        error_msg = f"Exception in send_to_kindle_gmail: {str(e)}"
+        error_msg = f"Exception in send_to_kindle: {str(e)}"
         logger.error(error_msg)
         logger.error(traceback.format_exc())
         return {"success": False, "error": error_msg}
