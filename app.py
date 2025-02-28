@@ -10,6 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -38,6 +39,10 @@ async def convert_to_epub(request: Request):
         articles = data.get("articles", [])
         logger.info(f"Processing {len(articles)} articles")
 
+        # Get current date for filename
+        today = datetime.now().strftime("%Y-%m-%d")
+        base_filename = f"Digest_{today}"
+        
         # Create formatted HTML file
         html_content = """
         <html>
@@ -58,6 +63,9 @@ async def convert_to_epub(request: Request):
         <body>
         """
 
+        # Add title with date
+        html_content += f"<h1>Daily Digest - {today}</h1>\n"
+
         for i, article in enumerate(articles):
             logger.info(f"Processing article {i+1}: {article.get('title', 'No title')}")
             html_content += f"<h1>{article.get('title', 'No title')}</h1>\n"
@@ -69,9 +77,9 @@ async def convert_to_epub(request: Request):
 
         html_content += "</body></html>"
 
-        html_path = "/app/daily_digest.html"
-        epub_path = "/app/daily_digest.epub"
-        mobi_path = "/app/daily_digest.mobi"
+        html_path = f"/app/{base_filename}.html"
+        epub_path = f"/app/{base_filename}.epub"
+        mobi_path = f"/app/{base_filename}.mobi"
         
         logger.info(f"Writing HTML to {html_path}")
         with open(html_path, "w") as f:
@@ -107,14 +115,14 @@ async def convert_to_epub(request: Request):
 
         # Send to Kindle
         logger.info("Sending to Kindle")
-        send_result = send_to_kindle_gmail(mobi_path)
+        send_result = send_to_kindle_gmail(mobi_path, base_filename)
         
         if not send_result["success"]:
             logger.error(f"Failed to send to Kindle: {send_result['error']}")
             return {"error": "Failed to send to Kindle", "details": send_result["error"]}
         
         logger.info("Successfully converted and sent to Kindle")
-        return {"message": "Converted & Sent!", "download_link": f"/download/daily_digest.mobi"}
+        return {"message": "Converted & Sent!", "download_link": f"/download/{base_filename}.mobi"}
     
     except Exception as e:
         logger.error(f"Error in convert_to_epub: {str(e)}")
@@ -130,7 +138,7 @@ async def download_file(filename: str):
         return {"error": "File not found"}
     return FileResponse(file_path)
 
-def send_to_kindle_gmail(file_path):
+def send_to_kindle_gmail(file_path, base_filename):
     try:
         logger.info(f"Sending {file_path} to Kindle at {KINDLE_EMAIL}")
         
@@ -143,17 +151,17 @@ def send_to_kindle_gmail(file_path):
         msg = MIMEMultipart()
         msg['From'] = GMAIL_USER
         msg['To'] = KINDLE_EMAIL
-        msg['Subject'] = "Your Daily RSS Feed"
+        msg['Subject'] = f"Daily Digest - {datetime.now().strftime('%Y-%m-%d')}"
         
         # Attach the body text
         body = "Here's your daily RSS feed for Kindle."
         msg.attach(MIMEText(body, 'plain'))
         
-        # Attach the file
+        # Attach the file with the date-based filename
         with open(file_path, 'rb') as file:
-            attachment = MIMEApplication(file.read(), Name="daily_digest.mobi")
+            attachment = MIMEApplication(file.read(), Name=f"{base_filename}.mobi")
         
-        attachment['Content-Disposition'] = f'attachment; filename="daily_digest.mobi"'
+        attachment['Content-Disposition'] = f'attachment; filename="{base_filename}.mobi"'
         msg.attach(attachment)
         
         # Connect to Gmail SMTP server
