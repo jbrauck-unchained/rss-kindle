@@ -4,6 +4,15 @@ FROM python:3.9-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Install Calibre for ebook-convert
+RUN apt-get update && apt-get install -y \
+    wget \
+    xz-utils \
+    xdg-utils \
+    && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sh /dev/stdin \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy everything at once
 COPY . .
 
