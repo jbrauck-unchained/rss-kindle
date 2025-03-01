@@ -36,14 +36,21 @@ async def convert_to_epub(request: Request):
     try:
         logger.info("Received convert request")
         data = await request.json()
+        logger.info(f"Received data type: {type(data)}")
+        logger.info(f"Received data: {data}")
         
         # Handle different input formats
-        if isinstance(data, dict) and "articles" in data:
-            articles = data["articles"]
+        if isinstance(data, dict):
+            if "articles" in data:
+                articles = data["articles"]
+            else:
+                # Single article as a dict
+                articles = [data]
         elif isinstance(data, list):
             articles = data
         else:
-            articles = [data]  # Assume it's a single article
+            # Fallback for any other type
+            articles = [str(data)]
             
         logger.info(f"Processing {len(articles)} articles")
 
@@ -75,6 +82,8 @@ async def convert_to_epub(request: Request):
         html_content += f"<h1>Daily Digest - {today}</h1>\n"
 
         for i, article in enumerate(articles):
+            logger.info(f"Article {i+1} type: {type(article)}")
+            
             # Handle case where article might be a string
             if isinstance(article, str):
                 logger.warning(f"Article {i+1} is a string, not an object")
