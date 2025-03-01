@@ -40,14 +40,39 @@ async def convert_to_epub(request: Request):
         logger.info(f"Received data: {data}")
         
         # Handle different input formats
-        if isinstance(data, dict):
+        articles = []
+        
+        if isinstance(data, list):
+            # Handle case where data is a list
+            for item in data:
+                if isinstance(item, dict):
+                    if "articles" in item:
+                        # Case: [{"articles": {...}}]
+                        article_data = item["articles"]
+                        if isinstance(article_data, dict):
+                            # Case: [{"articles": {"title": "...", ...}}]
+                            articles.append(article_data)
+                        elif isinstance(article_data, list):
+                            # Case: [{"articles": [{...}, {...}]}]
+                            articles.extend(article_data)
+                    else:
+                        # Case: [{...}, {...}]
+                        articles.append(item)
+                elif isinstance(item, str):
+                    # Case: ["string1", "string2"]
+                    articles.append(item)
+        elif isinstance(data, dict):
             if "articles" in data:
-                articles = data["articles"]
+                # Case: {"articles": [...]}
+                article_data = data["articles"]
+                if isinstance(article_data, list):
+                    articles = article_data
+                else:
+                    # Case: {"articles": {...}}
+                    articles = [article_data]
             else:
-                # Single article as a dict
+                # Case: {"title": "...", ...}
                 articles = [data]
-        elif isinstance(data, list):
-            articles = data
         else:
             # Fallback for any other type
             articles = [str(data)]
